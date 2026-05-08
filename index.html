@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Markets Pro</title>
+<title>Markets Pro Next Open</title>
 <meta name="theme-color" content="#0A0A0A">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -50,6 +50,21 @@
   .risk-crash { color:#FF1744; }
   .risk-meter { height:5px; background:#222; border-radius:999px; overflow:hidden; margin-top:8px; }
   .risk-fill { height:100%; border-radius:999px; transition:width .4s ease; }
+
+
+  #next-open { padding:12px 14px; border-bottom:1px solid #111; }
+  .next-card { background:linear-gradient(135deg,#101010,#0D1018); border:1px solid #20283A; border-radius:18px; padding:13px; }
+  .next-head { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:10px; }
+  .next-title { font-size:11px; font-weight:900; letter-spacing:1.2px; color:#EDEDED; text-transform:uppercase; }
+  .next-sub { font-size:10px; color:#555; margin-top:3px; line-height:1.35; }
+  .next-score { text-align:right; }
+  .next-score-main { font-size:24px; font-weight:950; font-variant-numeric:tabular-nums; }
+  .next-score-label { font-size:9px; color:#666; letter-spacing:1px; text-transform:uppercase; }
+  .next-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:7px; margin-top:8px; }
+  .next-mini { background:#0B0B0B; border:1px solid #1E1E1E; border-radius:12px; padding:8px; min-width:0; }
+  .next-mini-label { font-size:8px; color:#555; letter-spacing:1px; text-transform:uppercase; margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .next-mini-val { font-size:13px; font-weight:900; font-variant-numeric:tabular-nums; }
+  .next-note { margin-top:10px; font-size:10px; color:#666; line-height:1.35; }
 
   #alerts { padding:0 14px 10px; display:flex; gap:8px; overflow-x:auto; border-bottom:1px solid #111; }
   .alert-chip { white-space:nowrap; padding:8px 10px; border-radius:999px; background:#151515; border:1px solid #262626; color:#999; font-size:11px; }
@@ -147,6 +162,29 @@
   <div class="card"><div class="card-title">RISQUE MARCHÉ</div><div class="card-main" id="risk-card">—</div><div class="card-sub" id="risk-sub">Analyse tech / IA / momentum</div><div class="risk-meter"><div class="risk-fill" id="risk-fill"></div></div></div>
 </section>
 
+<section id="next-open">
+  <div class="next-card">
+    <div class="next-head">
+      <div>
+        <div class="next-title">🌙 NEXT OPEN</div>
+        <div class="next-sub" id="next-open-sub">Projection après clôture avec proxies : QQQ, SOXX, VXX, UUP + WORLD Est.</div>
+      </div>
+      <div class="next-score">
+        <div class="next-score-main" id="next-open-score">—</div>
+        <div class="next-score-label" id="next-open-label">Signal</div>
+      </div>
+    </div>
+    <div class="next-grid">
+      <div class="next-mini"><div class="next-mini-label">Nasdaq</div><div class="next-mini-val" id="sig-qqq">—</div></div>
+      <div class="next-mini"><div class="next-mini-label">Semi</div><div class="next-mini-val" id="sig-soxx">—</div></div>
+      <div class="next-mini"><div class="next-mini-label">Peur</div><div class="next-mini-val" id="sig-vxx">—</div></div>
+      <div class="next-mini"><div class="next-mini-label">USD</div><div class="next-mini-val" id="sig-uup">—</div></div>
+    </div>
+    <div class="next-note" id="next-open-note">Quand les marchés sont fermés, ce bloc sert surtout à lire le biais du lendemain, pas à prédire parfaitement la NAV BlackRock.</div>
+  </div>
+</section>
+
+
 <div id="alerts"></div>
 <div id="heatmap"></div>
 
@@ -183,6 +221,16 @@
 
 <script>
 const KEY = 'd7kudj9r01qiqbcvpug0d7kudj9r01qiqbcvpugg';
+
+
+
+const NEXT_OPEN_SYMBOLS = [
+  {ticker:'QQQ', key:'qqq', label:'Nasdaq'},      // proxy Nasdaq 100
+  {ticker:'SOXX', key:'soxx', label:'Semi'},      // semi-conducteurs
+  {ticker:'VXX', key:'vxx', label:'Peur'},        // volatilité / stress, positif = mauvais
+  {ticker:'UUP', key:'uup', label:'USD'}          // dollar US, positif = aide souvent ton fonds EUR
+];
+let nextOpenSignals = {};
 
 const LINKS = {
   NVDA:'https://www.zonebourse.com/cours/action/NVIDIA-CORPORATION-57355629/',
@@ -353,6 +401,79 @@ function calculateRisk() {
   return {score,label,klass,redRatio};
 }
 
+
+
+function estimateNextOpenProjection() {
+  const world = lastData.WORLD?.pct ?? null;
+  const qqq   = nextOpenSignals.qqq?.pct ?? null;
+  const soxx  = nextOpenSignals.soxx?.pct ?? null;
+  const vxx   = nextOpenSignals.vxx?.pct ?? null;
+  const uup   = nextOpenSignals.uup?.pct ?? null;
+
+  let total = 0, weight = 0;
+  function add(v,w) { if (v != null && !isNaN(v)) { total += v*w; weight += w; } }
+
+  add(world, 0.45);      // estimation maison MSCI World
+  add(qqq,   0.25);      // tech US / Nasdaq
+  add(soxx,  0.18);      // semi-conducteurs / IA
+  add(vxx != null ? -vxx : null, 0.07); // VXX monte = stress, donc effet inverse
+  add(uup,   0.05);      // USD fort aide les actifs US en EUR
+
+  if (!weight) return null;
+  return total / weight;
+}
+
+function updateNextOpenPanel() {
+  const projection = estimateNextOpenProjection();
+  const scoreEl = document.getElementById('next-open-score');
+  const labelEl = document.getElementById('next-open-label');
+  const subEl = document.getElementById('next-open-sub');
+  const noteEl = document.getElementById('next-open-note');
+  if (!scoreEl) return;
+
+  const qqq = nextOpenSignals.qqq?.pct ?? null;
+  const soxx = nextOpenSignals.soxx?.pct ?? null;
+  const vxx = nextOpenSignals.vxx?.pct ?? null;
+  const uup = nextOpenSignals.uup?.pct ?? null;
+
+  [['sig-qqq', qqq], ['sig-soxx', soxx], ['sig-vxx', vxx], ['sig-uup', uup]].forEach(([id,val])=>{
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = pTxt(val);
+    el.style.color = col(val);
+  });
+
+  if (projection == null || isNaN(projection)) {
+    scoreEl.textContent = '—';
+    labelEl.textContent = 'Signal';
+    subEl.textContent = 'Données insuffisantes pour estimer le biais du lendemain.';
+    return;
+  }
+
+  scoreEl.textContent = pTxt(projection);
+  scoreEl.style.color = col(projection);
+
+  let label = 'NEUTRE', note = 'Biais neutre : pas assez de signal fort pour anticiper clairement la prochaine ouverture.';
+  if (projection >= 0.45) { label = 'BULLISH'; note = 'Biais favorable : tech/semi/WORLD donnent un signal positif. Attention quand même à la devise EUR/USD.'; }
+  else if (projection >= 0.15) { label = 'LÉGÈRE HAUSSE'; note = 'Biais positif modéré : plutôt vert, mais pas un signal assez fort pour être sûr.'; }
+  else if (projection <= -0.45) { label = 'RISK OFF'; note = 'Biais dangereux : plusieurs signaux pointent vers une ouverture/faiblesse possible.'; }
+  else if (projection <= -0.15) { label = 'LÉGÈRE BAISSE'; note = 'Biais négatif modéré : attention au lendemain, surtout si les news confirment.'; }
+
+  labelEl.textContent = label;
+  subEl.textContent = 'Projection WORLD demain : environ '+pTxt(projection)+' · basée sur proxies après clôture.';
+  noteEl.textContent = note;
+}
+
+async function fetchNextOpenSignals() {
+  for (let i=0; i<NEXT_OPEN_SYMBOLS.length; i++) {
+    const item = NEXT_OPEN_SYMBOLS[i];
+    const q = await fetchQuote(item.ticker);
+    if (q) nextOpenSignals[item.key] = q;
+    if (i < NEXT_OPEN_SYMBOLS.length-1) await new Promise(r=>setTimeout(r,120));
+  }
+  updateNextOpenPanel();
+}
+
 function updateDashboard(results) {
   const w = getWorldEstimate();
   const wc = document.getElementById('world-card');
@@ -484,6 +605,7 @@ async function fetchAll(first=false) {
   }
   const world = getSyntheticData('WORLD');
   lastData.WORLD = world; updateHistory('WORLD', world?.pct);
+  updateNextOpenPanel();
 
   if (first && results.filter(Boolean).length === 0) {
     document.getElementById('list').innerHTML='<div style="text-align:center;padding:40px;color:#666">Erreur de connexion.<br><span style="cursor:pointer;color:#00E676" onclick="init()">Réessayer</span></div>';
@@ -495,6 +617,7 @@ async function fetchAll(first=false) {
   updatePortfolio();
   buildAlerts();
   updateHeatmap(results);
+  await fetchNextOpenSignals();
   localStorage.setItem('sparkHistory', JSON.stringify(history));
   const n=new Date(), p=x=>String(x).padStart(2,'0');
   document.getElementById('footer').textContent='Finnhub · Mis à jour '+p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds())+' · Actualisation dans 60s';

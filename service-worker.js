@@ -1,4 +1,4 @@
-const CACHE_NAME = 'markets-pro-v1';
+const CACHE_NAME = 'markets-pro-next-open-v2';
 const ASSETS = [
   './',
   './index.html',
